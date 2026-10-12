@@ -88,11 +88,20 @@ incremental = false
 [profile.ci.package."*"]
 opt-level = 2
 
+# Release ships the fastest and smallest build we have measured (2026-10-12, 16 cores,
+# `cargo build --release -p solvecraft-cli -p solvecraft`): fat LTO with one codegen unit runs the
+# holes_100 / pattern_196 eval designs equal or slightly faster than thin LTO with 16 units and
+# cuts the binaries from 58.3/25.0 MB to 43.5/20.1 MB; `strip = "symbols"` takes them to
+# 38.1/17.7 MB (-34.6% / -29.1%). The price is a longer cold release build: 7m29s against 4m14s.
+# Stripping removes symbol names from release backtraces (debug info was already off); panics stay
+# unwind because Session::execute keeps a `catch_unwind` as the last-resort guard against losing a
+# user's design.
 [profile.release]
 opt-level = 3
-lto = "thin"
-codegen-units = 16
+lto = "fat"
+codegen-units = 1
 debug = 0
+strip = "symbols"
 
 # truck-shapeops with SolveCraft fixes (Apache-2.0, see vendor/truck-shapeops and ATTRIBUTION.md).
 [patch.crates-io]
