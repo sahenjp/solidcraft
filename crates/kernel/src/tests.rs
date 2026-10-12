@@ -1812,18 +1812,20 @@ fn raise_band_on_a_rounded_rim() {
 
 #[test]
 fn orientation_mesh_reuses_missing_face_check_at_matching_tolerance() {
+    // A body more than 100 mm across is the case that used to miss the cache: the orientation
+    // mesh clamps its deflection at 1 mm, and this check counted at span/100 instead, so it
+    // meshed the body a second time for a count it could have read.
     for scale in [0.001, 1.0, 1000.0] {
         let body = box_solid(Vec3::ZERO, Vec3::new(10., 20., 30.) * scale).unwrap();
-        let tol = (body.size() * 0.01).max(1e-3);
+        let tol = (body.size() * 0.01).clamp(1e-3, 1.0);
         let mesh = body.tessellate(tol).unwrap();
         let mut present = vec![false; body.face_count()];
         for face in mesh.tri_face {
             present[face as usize] = true;
         }
-        assert_eq!(body.unmeshed_faces(), present.iter().filter(|p| !**p).count());
-        if scale == 1.0 {
-            assert_eq!(body.coarse_missing, Some((tol, 0)));
-        }
+        let missing = present.iter().filter(|p| !**p).count();
+        assert_eq!(body.unmeshed_faces(), missing);
+        assert_eq!(body.coarse_missing, Some((tol, missing)), "scale {scale}: the orientation mesh's count is the one reused");
     }
 }
 

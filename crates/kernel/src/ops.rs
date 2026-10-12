@@ -31,7 +31,7 @@ pub fn can_join_touching_faces(a: &Body, b: &Body) -> bool {
 const JITTER: [[f64; 3]; 4] = [[0.0, 0.0, 0.0], [0.1373, 0.2719, 0.3911], [-0.5127, 0.0833, 0.2291], [0.6911, -0.3337, -0.6127]];
 
 fn volume(b: &Body) -> f64 {
-    b.tessellate(b.size() * 2e-3).map(|m| m.measure().volume).unwrap_or(f64::NAN)
+    b.volume_at(b.size() * 2e-3).unwrap_or(f64::NAN)
 }
 
 /// Halton low-discrepancy value (base `b`) for index `i`.
@@ -163,6 +163,66 @@ mod shortcut_tests {
     }
 }
 
+#[cfg(test)]
+mod prism_fast_path_tests {
+    use super::*;
+    use std::f64::consts::PI;
+
+    /// A cylindrical tool through a plate: the exact prism route answers the pair, and the
+    /// material it removes is the tool's own.
+    #[test]
+    fn a_hole_through_a_plate_removes_the_tool_volume() {
+        let plate = crate::box_solid(Vec3::ZERO, Vec3::new(40.0, 30.0, 10.0)).expect("plate");
+        let tool = crate::cylinder(Vec3::new(20.0, 15.0, -1.0), Vec3::Z, 5.0, 12.0).expect("tool");
+        let cut = boolean(&plate, &tool, BoolOp::Cut).expect("cut").expect("a hole leaves material");
+        let m = crate::measure(&cut).expect("measure");
+        let want = 40.0 * 30.0 * 10.0 - PI * 25.0 * 10.0;
+        assert!((m.volume - want).abs() < want * 5e-3, "{} vs {want}", m.volume);
+        assert_eq!(m.merged.face_types.get("cylinder"), Some(&1), "the bore is the only curved face");
+        assert!(cut.validity().is_empty(), "{:?}", cut.validity());
+    }
+
+    /// Boxes that stay apart: the union keeps both, whichever route decides it.
+    #[test]
+    fn bodies_that_stay_apart_join_into_one_body_with_both_lumps() {
+        let a = crate::box_solid(Vec3::ZERO, Vec3::new(10.0, 10.0, 10.0)).expect("a");
+        let b = crate::box_solid(Vec3::new(20.0, 0.0, 0.0), Vec3::new(30.0, 10.0, 10.0)).expect("b");
+        let joined = boolean(&a, &b, BoolOp::Union).expect("union").expect("two boxes");
+        assert!((crate::measure(&joined).expect("measure").volume - 2000.0).abs() < 1e-6);
+        assert_eq!(joined.lumps().expect("lumps").len(), 2);
+    }
+
+    /// A tool that misses its target, in section or along the extrusion, leaves it as it is:
+    /// the sampled shortcut answers that by reusing the operand, and the 2D route must not
+    /// rebuild it into a look-alike solid on the way past.
+    #[test]
+    fn a_cut_that_changes_nothing_keeps_the_original_body() {
+        let plate = crate::box_solid(Vec3::ZERO, Vec3::new(40.0, 30.0, 10.0)).expect("plate");
+        let past_the_end = crate::box_solid(Vec3::new(200.0, 200.0, -5.0), Vec3::new(210.0, 210.0, 20.0)).expect("tool");
+        assert!(
+            boolean(&plate, &past_the_end, BoolOp::Cut).expect("cut").expect("material stays").same(&plate),
+            "a tool clear of the plate must leave the very same body"
+        );
+        let inside_the_height = crate::box_solid(Vec3::new(200.0, 200.0, 5.0), Vec3::new(210.0, 210.0, 20.0)).expect("tool");
+        assert!(
+            boolean(&plate, &inside_the_height, BoolOp::Cut).expect("cut").expect("material stays").same(&plate),
+            "a tool that only overlaps the plate's height must leave the very same body"
+        );
+        let covers_it = crate::box_solid(Vec3::new(-10.0, -10.0, -10.0), Vec3::new(50.0, 40.0, 20.0)).expect("tool");
+        assert!(boolean(&plate, &covers_it, BoolOp::Cut).expect("cut").is_none(), "a tool over the whole plate removes it");
+    }
+
+    /// A tool wholly inside its target leaves a closed void, not a through cut.
+    #[test]
+    fn a_tool_wholly_inside_leaves_a_closed_void() {
+        let block = crate::box_solid(Vec3::ZERO, Vec3::new(40.0, 40.0, 40.0)).expect("block");
+        let inner = crate::box_solid(Vec3::new(15.0, 15.0, 15.0), Vec3::new(25.0, 25.0, 25.0)).expect("inner");
+        let cut = boolean(&block, &inner, BoolOp::Cut).expect("cut").expect("a void leaves material");
+        assert!((crate::measure(&cut).expect("measure").volume - 63000.0).abs() < 1e-6);
+        assert!(cut.validity().is_empty(), "{:?}", cut.validity());
+    }
+}
+
 /// `a` with the inside of `b` (wholly within it) taken out: a second, inward-facing shell.
 fn void(a: &Body, b: &Body) -> Result<Option<Body>> {
     guard("void", || {
@@ -254,6 +314,38 @@ fn planar_surfaces_match(a: &Body, b: &Body, result: &Body) -> bool {
     })
 }
 
+/// Whether a result volume is plausible for `op`: within the bounds the operands' volumes
+/// leave, plus the slack the meshed volumes are measured to.
+fn plausible(v: f64, op: BoolOp, va: f64, vb: f64, slack: f64) -> bool {
+    v > 0.0
+        && match op {
+            BoolOp::Union => v >= va.max(vb) - slack && v <= va + vb + slack,
+            BoolOp::Cut => v >= va - vb - slack && v <= va + slack,
+            BoolOp::Intersect => v <= va.min(vb) + slack,
+        }
+}
+
+/// The prism route's result: `Some` when both operands are prisms along one direction (see
+/// [`crate::prism::prism_boolean`]), with a union's slab seams healed as the general B-rep
+/// boolean does.
+fn prism_result(a: &Body, b: &Body, op: BoolOp, size: f64) -> Option<Result<Option<Body>>> {
+    // Slab-by-slab prism joins sew a closed solid, but leave cap and wall pieces along slab
+    // boundaries. Merge those coplanar faces just as the general B-rep boolean does, retaining
+    // intentional Split Face lines.
+    let keep: Vec<Vec<Vec3>> = a.split_keep().iter().chain(b.split_keep()).cloned().collect();
+    crate::prism::prism_boolean(a, b, op).map(|result| {
+        result.map(|body| {
+            body.map(|body| {
+                if op == BoolOp::Union {
+                    guard("heal prism boolean", || Body::new(crate::heal::heal_keep((*body.solid).clone(), size, &keep))).unwrap_or(body)
+                } else {
+                    body
+                }
+            })
+        })
+    })
+}
+
 /// Smallest side of the box where the bodies' vertex boxes overlap (infinite when they don't).
 fn meeting_size(a: &Body, b: &Body) -> f64 {
     let bbox = |x: &Body| {
@@ -278,7 +370,32 @@ fn boolean_whole(a: &Body, b: &Body, op: BoolOp) -> Result<Option<Body>> {
     // refined: a round side trimmed to a thin band (a short boss crossing a gently sloping
     // floor) is otherwise spanned by triangles cutting through it, which reads as missing
     // material.
-    let tol_m = (size * 5e-4).min(meeting_size(a, b) * 2e-3).max(size * 1e-5);
+    let meeting = meeting_size(a, b);
+    let tol_m = (size * 5e-4).min(meeting * 2e-3).max(size * 1e-5);
+    // Only a cut or an intersection meets its tool often enough to be worth asking the prism
+    // route before the sampled shortcut below. Parts that stay apart are settled far more
+    // cheaply by the shell join that shortcut does, and a union is exactly that case. A pair the
+    // route cannot answer still takes the path below, unchanged.
+    let early_prism = matches!(op, BoolOp::Cut | BoolOp::Intersect);
+    let prism = early_prism.then(|| prism_result(a, b, op, size)).flatten();
+    if let Some(Ok(Some(body))) = &prism {
+        let (va0, vb0) = (volume(a), volume(b));
+        let (v0, slack0) = (volume(body), 2e-3 * (va0 + vb0) + 1e-9);
+        // A tool that misses its target, or covers it whole, leaves it as it is, and the
+        // sampled shortcut below answers that by reusing the operand itself: the very same
+        // body. The 2D route rebuilds it instead - the same shape on new faces - which would
+        // turn an untouched body in a timeline into a different solid. Leave those pairs to the
+        // path below, which decides them, and the identity they keep, exactly as it always has.
+        let unchanged = 1e-4 * (va0 + vb0);
+        let rebuilt_from_an_operand = match op {
+            BoolOp::Cut => v0 >= va0 - unchanged,
+            BoolOp::Intersect => (v0 - va0).abs() <= unchanged || (v0 - vb0).abs() <= unchanged,
+            BoolOp::Union => false,
+        };
+        if !rebuilt_from_an_operand && plausible(v0, op, va0, vb0, slack0) {
+            return Ok(Some(body.clone()));
+        }
+    }
     let meshes = (a.tessellate_with(tol_m, true).ok(), b.tessellate_with(tol_m, true).ok());
     let (va, vb) = match &meshes {
         (Some(ma), Some(mb)) => (ma.measure().volume, mb.measure().volume),
@@ -290,13 +407,7 @@ fn boolean_whole(a: &Body, b: &Body, op: BoolOp) -> Result<Option<Body>> {
     let check = |r: &Body| -> (bool, f64) {
         let Ok(mr) = r.tessellate_with(tol_m, true) else { return (false, f64::NAN) };
         let v = mr.measure().volume;
-        let bounds = v > 0.0
-            && match op {
-                BoolOp::Union => v >= va.max(vb) - slack && v <= va + vb + slack,
-                BoolOp::Cut => v >= va - vb - slack && v <= va + slack,
-                BoolOp::Intersect => v <= va.min(vb) + slack,
-            };
-        if !bounds {
+        if !plausible(v, op, va, vb, slack) {
             return (false, v);
         }
         let consistent = match &meshes {
@@ -315,29 +426,17 @@ fn boolean_whole(a: &Body, b: &Body, op: BoolOp) -> Result<Option<Body>> {
     // Coincident faces make the intersection fail after many retries; push them apart first.
     // Prisms along one direction (plates with holes): exact, in 2D (so only the volume
     // bounds are checked).
-    if let Some(Ok(r)) = crate::prism::prism_boolean(a, b, op) {
-        // Slab-by-slab prism joins sew a closed solid, but leave cap and wall
-        // pieces along slab boundaries. Merge those coplanar faces just as the
-        // general B-rep boolean does, retaining intentional Split Face lines.
-        let keep: Vec<Vec<Vec3>> = a.split_keep().iter().chain(b.split_keep()).cloned().collect();
-        let r = if op == BoolOp::Union {
-            r.map(|body| guard("heal prism boolean", || Body::new(crate::heal::heal_keep((*body.solid).clone(), size, &keep))).unwrap_or(body))
-        } else {
-            r
-        };
-        match &r {
-            Some(body) => {
-                let v = volume(body);
-                let bounds = match op {
-                    BoolOp::Union => v >= va.max(vb) - slack && v <= va + vb + slack,
-                    BoolOp::Cut => v >= va - vb - slack && v <= va + slack,
-                    BoolOp::Intersect => v <= va.min(vb) + slack,
-                };
-                if v > 0.0 && bounds {
-                    return Ok(r);
+    let prism = prism.or_else(|| (!early_prism).then(|| prism_result(a, b, op, size)).flatten());
+    if let Some(result) = prism {
+        match result {
+            Ok(Some(body)) => {
+                if plausible(volume(&body), op, va, vb, slack) {
+                    return Ok(Some(body));
                 }
             }
-            None => return Ok(None),
+            Ok(None) => return Ok(None),
+            // A failed prism attempt keeps trying the other strategies, as it did before.
+            Err(_) => {}
         }
     }
     // Bodies touching along one whole face (a part joined with its mirror image).
@@ -563,10 +662,31 @@ pub fn transform_matrix(body: &Body, m: [[f64; 4]; 4]) -> Result<Body> {
         );
         // An affine placement retains face order and appearance metadata.
         let sources = body.transformed_sources(m)?;
-        Body::new(placed_topology(&body.solid, mat)?).map(|placed| {
-            placed.with_color(body.color()).with_paint(body.paint().cloned()).with_face_sources(sources).inherit_regularization_protection(body)
-        })
+        let placed = placed_topology(&body.solid, mat)?;
+        // A placement keeps every face pointing the way it did unless the matrix mirrors it,
+        // so its orientation is read from the determinant. Body::new would mesh the whole
+        // solid to find the same sign, which patterns, mirrors and assembly placements paid
+        // once per copy. Surfaces (no inside) keep the old path.
+        let oriented = if body.is_surface() {
+            Body::new(placed)?
+        } else {
+            Body::new_placed(placed, det3(&m) < 0.0, rigid_placement(&m).then_some(body.coarse_missing).flatten())?
+        };
+        Ok(oriented.with_color(body.color()).with_paint(body.paint().cloned()).with_face_sources(sources).inherit_regularization_protection(body))
     })
+}
+
+/// Determinant of the linear part of a placement matrix (negative: it mirrors).
+fn det3(m: &[[f64; 4]; 4]) -> f64 {
+    m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
+        + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0])
+}
+
+/// Whether the linear part is a rigid placement (rotation or reflection: no scale or shear).
+/// A rigid placement leaves every face's mesh, and so the missing-face count, as it was.
+fn rigid_placement(m: &[[f64; 4]; 4]) -> bool {
+    let r = [Vec3::new(m[0][0], m[0][1], m[0][2]), Vec3::new(m[1][0], m[1][1], m[1][2]), Vec3::new(m[2][0], m[2][1], m[2][2])];
+    (0..3).all(|i| (r[i].dot(r[i]) - 1.0).abs() < 1e-9) && r[0].dot(r[1]).abs() < 1e-9 && r[0].dot(r[2]).abs() < 1e-9 && r[1].dot(r[2]).abs() < 1e-9
 }
 
 // A STEP periodic face may traverse a seam edge twice. Generic topology builders

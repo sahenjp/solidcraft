@@ -880,6 +880,8 @@ pub(crate) fn split_any(body: &Body, faces: &[usize], tool: &SplitTool) -> Resul
         Ok((
             Body {
                 solid: std::sync::Arc::new(solid),
+                size: 0.0,
+                volume: Some(std::sync::Arc::new(std::sync::Mutex::new(None))),
                 coarse_missing: None,
                 mesh: None,
                 color: body.color,

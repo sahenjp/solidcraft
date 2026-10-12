@@ -24,6 +24,8 @@ fn surface_body(faces: Vec<mt::Face>) -> Body {
     let shell = mt::Shell::from(faces);
     Body {
         solid: std::sync::Arc::new(mt::Solid::new_unchecked(vec![shell])),
+        size: 0.0,
+        volume: Some(std::sync::Arc::new(std::sync::Mutex::new(None))),
         coarse_missing: None,
         mesh: None,
         color: None,
@@ -42,6 +44,8 @@ fn body_of(faces: Vec<mt::Face>) -> Result<Body> {
     } else {
         Ok(Body {
             solid: std::sync::Arc::new(mt::Solid::new_unchecked(vec![shell])),
+            size: 0.0,
+            volume: Some(std::sync::Arc::new(std::sync::Mutex::new(None))),
             coarse_missing: None,
             mesh: None,
             color: None,
