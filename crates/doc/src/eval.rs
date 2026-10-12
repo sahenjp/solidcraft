@@ -80,6 +80,15 @@ pub struct SolvedSketch {
     pub profiles: Vec<Profile>,
 }
 
+impl SolvedSketch {
+    /// Rough heap footprint (see ModelState::retained_bytes).
+    pub fn retained_bytes(&self) -> usize {
+        let entities = self.sketch.points.len() + self.sketch.curves.len() + self.sketch.constraints.len() + self.sketch.links.len();
+        let loops: usize = self.profiles.iter().map(|p| p.region.outer.segs.len() + p.region.holes.iter().map(|h| h.segs.len()).sum::<usize>()).sum();
+        entities * 192 + loops * 64 + 512
+    }
+}
+
 /// A cosmetic thread: on which cylinder, its size, and the threaded part of the axis.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct ThreadInfo {
@@ -345,6 +354,8 @@ impl ModelState {
 pub struct EvalCache {
     map: std::collections::HashMap<u64, CachedEval>,
     order: std::collections::VecDeque<u64>,
+    /// What the stored results cost together.
+    bytes: usize,
     pub hits: usize,
 }
 
@@ -354,10 +365,17 @@ struct CachedEval {
     warning: Option<String>,
     ms: f64,
     state: Arc<ModelState>,
+    /// What the state costs, worked out once when it was stored (see ModelState::retained_bytes).
+    bytes: usize,
 }
 
 /// Results kept (oldest dropped first).
 const CACHE_ENTRIES: usize = 4096;
+
+/// Bytes of results kept (oldest dropped first). A snapshot is as big as the model it holds,
+/// so an entry count alone let a long editing session keep every superseded state alive: the
+/// entries nothing else refers to any more are exactly the ones a byte budget drops.
+const CACHE_BYTES: usize = 64 << 20;
 
 impl EvalCache {
     fn get(&mut self, key: u64) -> Option<CachedEval> {
@@ -368,18 +386,33 @@ impl EvalCache {
         r
     }
     fn put(&mut self, key: u64, e: CachedEval) {
-        if self.map.insert(key, e).is_none() {
-            self.order.push_back(key);
+        let bytes = e.bytes;
+        match self.map.insert(key, e) {
+            Some(old) => self.bytes = self.bytes.saturating_sub(old.bytes),
+            None => self.order.push_back(key),
         }
-        while self.order.len() > CACHE_ENTRIES {
-            if let Some(k) = self.order.pop_front() {
-                self.map.remove(&k);
+        self.bytes = self.bytes.saturating_add(bytes);
+        // One result is always kept: a single state bigger than the budget would otherwise
+        // empty the cache and make every undo recompute from scratch.
+        while (self.order.len() > CACHE_ENTRIES || self.bytes > CACHE_BYTES) && self.order.len() > 1 {
+            let Some(k) = self.order.pop_front() else { break };
+            if let Some(old) = self.map.remove(&k) {
+                self.bytes = self.bytes.saturating_sub(old.bytes);
             }
         }
     }
 }
 
 impl ModelState {
+    /// Rough heap footprint, for the evaluation cache's byte budget. The bodies' B-rep
+    /// topology is what makes a kept timeline snapshot expensive, so it dominates; sketches
+    /// and the rest are counted from their entity counts.
+    pub fn retained_bytes(&self) -> usize {
+        let bodies: usize = self.bodies.iter().map(|b| b.body.retained_bytes()).sum();
+        let sketches: usize = self.sketches.iter().map(SolvedSketch::retained_bytes).sum();
+        bodies + sketches + self.sheets.len() * 4096 + self.threads.len() * 192 + self.construct.len() * 192
+    }
+
     pub fn body(&self, name: &str) -> Option<&ModelBody> {
         self.bodies.iter().find(|b| b.name == name)
     }
@@ -730,7 +763,8 @@ impl Model {
             if !self.no_cache
                 && let Ok(mut m) = self.cache.lock()
             {
-                m.put(key, CachedEval { error: error.clone(), warning: warning.clone(), ms, state: state.clone() });
+                let bytes = state.retained_bytes();
+                m.put(key, CachedEval { error: error.clone(), warning: warning.clone(), ms, state: state.clone(), bytes });
             }
             out.push(FeatureResult { id: f.id, name: f.name.clone(), error, warning, ms, skipped: false, fingerprint: fp, state: state.clone() });
         }
