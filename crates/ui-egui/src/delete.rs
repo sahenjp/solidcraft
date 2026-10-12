@@ -107,7 +107,7 @@ pub fn show(app: &mut SolveApp, ctx: &egui::Context) {
     };
     let (deleted, fails) = (list("deleted"), list("would_fail"));
     let mut answer: Option<bool> = None;
-    crate::frame::window(ctx, "Delete", crate::frame::Width::Normal)
+    crate::frame::window(ctx, crate::i18n::tr_label("Delete"), crate::frame::Width::Normal)
         .id(egui::Id::new("sc_delete_confirm"))
         .collapsible(false)
         .resizable(false)
@@ -118,7 +118,7 @@ pub fn show(app: &mut SolveApp, ctx: &egui::Context) {
                 ui.label("This child is shared. Deleting it removes it from every copy of its parent.");
             }
             if !deleted.is_empty() {
-                ui.label("These features will be deleted:");
+                ui.label(crate::i18n::tr_label("These features will be deleted:"));
                 for d in deleted.iter().take(20) {
                     ui.label(RichText::new(format!("  • {d}")).color(t.text));
                 }
@@ -128,17 +128,17 @@ pub fn show(app: &mut SolveApp, ctx: &egui::Context) {
             }
             if !fails.is_empty() {
                 ui.add_space(6.0);
-                ui.label(RichText::new("These features will fail:").color(t.warning));
+                ui.label(RichText::new(crate::i18n::tr_label("These features will fail:")).color(t.warning));
                 for f in fails.iter().take(20) {
                     ui.label(RichText::new(format!("  • {f}")).color(t.warning));
                 }
             }
             ui.add_space(8.0);
             ui.horizontal(|ui| {
-                if ui.button("Delete").clicked() {
+                if ui.button(crate::i18n::tr_label("Delete")).clicked() {
                     answer = Some(true);
                 }
-                if ui.button("Cancel").clicked() {
+                if ui.button(crate::i18n::tr_label("Cancel")).clicked() {
                     answer = Some(false);
                 }
             });

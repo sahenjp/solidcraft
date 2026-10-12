@@ -1548,7 +1548,7 @@ fn show_rename(app: &mut SolveApp, ctx: &egui::Context) {
     let resp = crate::frame::area(egui::Id::new("sc_rename")).fixed_pos(r.at).constrain(true).order(egui::Order::Foreground).show(ctx, |ui| {
         menu_frame(ui, |ui| {
             ui.add_space(2.0);
-            ui.label(egui::RichText::new("Rename").size(11.0).color(t.text_dim));
+            ui.label(egui::RichText::new(crate::i18n::tr_label("Rename")).size(11.0).color(t.text_dim));
             let te = ui.add(egui::TextEdit::singleline(&mut r.text).desired_width(200.0).id(egui::Id::new("sc_rename_text")));
             if !r.focused {
                 // Start with the whole name selected, ready to type over.
@@ -1605,27 +1605,27 @@ fn show_props(app: &mut SolveApp, ctx: &egui::Context) {
                 let total = &v["total"];
                 let bodies = v["bodies"].as_array().cloned().unwrap_or_default();
                 if let [b] = bodies.as_slice() {
-                    ui.label("Material");
+                    ui.label(crate::i18n::tr_label("Material"));
                     ui.label(b["material"].as_str().unwrap_or("Default"));
                     ui.end_row();
-                    ui.label("Density");
+                    ui.label(crate::i18n::tr_label("Density"));
                     ui.label(format!("{:.3} g/cm³", f(b, "density_g_cm3")));
                     ui.end_row();
                 }
-                ui.label("Mass");
+                ui.label(crate::i18n::tr_label("Mass"));
                 ui.label(format!("{:.3} g", f(total, "mass_g")));
                 ui.end_row();
-                ui.label("Volume");
+                ui.label(crate::i18n::tr_label("Volume"));
                 ui.label(crate::prefs::show_mm(app, f(total, "volume_mm3"), 3));
                 ui.end_row();
-                ui.label("Area");
+                ui.label(crate::i18n::tr_label("Area"));
                 ui.label(crate::prefs::show_mm(app, f(total, "area_mm2"), 2));
                 ui.end_row();
                 let geometry = if total.get("center_of_mass").is_some() { Some(total) } else { bodies.first().filter(|_| bodies.len() == 1) };
                 if let Some(b) = geometry {
                     if let Some(c) = b["center_of_mass"].as_array() {
                         let c: Vec<String> = c.iter().map(|x| crate::prefs::show_mm_bare(app, x.as_f64().unwrap_or(f64::NAN))).collect();
-                        ui.label("Center of mass");
+                        ui.label(crate::i18n::tr_label("Center of mass"));
                         ui.label(format!("({}) {}", c.join(", "), crate::prefs::unit_scale(&app.session.doc.units).1));
                         ui.end_row();
                     }
@@ -1636,12 +1636,12 @@ fn show_props(app: &mut SolveApp, ctx: &egui::Context) {
                             .zip(z)
                             .map(|(a, z)| crate::prefs::show_mm_bare(app, z.as_f64().unwrap_or(0.0) - a.as_f64().unwrap_or(0.0)))
                             .collect();
-                        ui.label("Bounding box");
+                        ui.label(crate::i18n::tr_label("Bounding box"));
                         ui.label(format!("{} {}", d.join(" × "), crate::prefs::unit_scale(&app.session.doc.units).1));
                         ui.end_row();
                     }
                 }
-                ui.label("Faces / edges / vertices");
+                ui.label(crate::i18n::tr_label("Faces / edges / vertices"));
                 ui.label(format!("{} / {} / {}", total["faces"], total["edges"], total["vertices"]));
                 ui.end_row();
             });

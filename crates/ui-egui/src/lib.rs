@@ -188,6 +188,8 @@ pub struct Services {
 
 pub struct SolveApp {
     pub session: Session,
+    /// The locale the CJK fallback font was installed for (see `fonts::setup_fonts`).
+    pub(crate) fonts_language: Option<String>,
     pub ui: UiState,
     pub cam: Camera,
     /// A view change in progress (axis view, Home, Fit); any mouse navigation cancels it.
@@ -268,6 +270,7 @@ impl SolveApp {
     pub fn new(session: Session, services: Services) -> Self {
         SolveApp {
             session,
+            fonts_language: None,
             ui: UiState::default(),
             cam: Camera::default(),
             cam_anim: None,

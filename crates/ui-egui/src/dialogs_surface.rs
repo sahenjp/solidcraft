@@ -80,7 +80,7 @@ pub fn rows(ui: &mut egui::Ui, k: &mut Surf) -> bool {
     match k {
         Surf::Stitch { tolerance } => {
             row_label(ui, "Tolerance");
-            let r = ui.add(egui::TextEdit::singleline(tolerance).hint_text("tight"));
+            let r = ui.add(egui::TextEdit::singleline(tolerance).hint_text(crate::i18n::tr_label("tight")));
             crate::params_dialog::complete(ui, &r, tolerance);
             enter |= r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
             ui.end_row();

@@ -430,7 +430,7 @@ pub fn show(app: &mut SolveApp, ctx: &egui::Context) {
     let mut retake = false;
     let mut close = false;
     let screen = ctx.content_rect();
-    crate::frame::window(ctx, "Create Issue — review draft", crate::frame::Width::Wide)
+    crate::frame::window(ctx, crate::i18n::tr_label("Create Issue — review draft"), crate::frame::Width::Wide)
         .id(egui::Id::new("sc_issue_report"))
         .open(&mut open)
         .resizable(true)
@@ -439,11 +439,11 @@ pub fn show(app: &mut SolveApp, ctx: &egui::Context) {
         .max_height((screen.height() - 32.0).max(100.0))
         .vscroll(true)
         .show(ctx, |ui| {
-            ui.label("Review the report and screenshot before opening GitHub.");
+            ui.label(crate::i18n::tr_label("Review the report and screenshot before opening GitHub."));
             ui.add(
                 egui::TextEdit::singleline(&mut draft.title)
                     .id(egui::Id::new("issue_report_title"))
-                    .hint_text("Issue title")
+                    .hint_text(crate::i18n::tr_label("Issue title"))
                     .char_limit(160)
                     .desired_width(f32::INFINITY),
             );
@@ -458,7 +458,7 @@ pub fn show(app: &mut SolveApp, ctx: &egui::Context) {
             });
             truncate(&mut draft.title, 160);
             truncate(&mut draft.body, MAX_BODY);
-            ui.label(RichText::new("Remove private design details or paths before sharing.").small());
+            ui.label(RichText::new(crate::i18n::tr_label("Remove private design details or paths before sharing.")).small());
             ui.label(&draft.note);
             if let Some(image) = draft.image.as_ref() {
                 let texture =
@@ -470,14 +470,19 @@ pub fn show(app: &mut SolveApp, ctx: &egui::Context) {
                 );
             }
             ui.horizontal_wrapped(|ui| {
-                retake = ui.button("Retake screenshot").clicked();
-                if ui.add_enabled(draft.image.is_some(), egui::Button::new("Copy screenshot")).clicked()
+                retake = ui.button(crate::i18n::tr_label("Retake screenshot")).clicked();
+                if ui.add_enabled(draft.image.is_some(), egui::Button::new(crate::i18n::tr_label("Copy screenshot"))).clicked()
                     && let Some(image) = draft.image.as_ref()
                 {
                     ctx.copy_image((**image).clone());
                     draft.note = "Paste the image into the GitHub draft, or save the PNG if image copying is unavailable.".into();
                 }
-                if ui.add_enabled(draft.image.is_some() && app.services.pick_save.is_some(), egui::Button::new("Save screenshot…")).clicked()
+                if ui
+                    .add_enabled(
+                        draft.image.is_some() && app.services.pick_save.is_some(),
+                        egui::Button::new(crate::i18n::tr_label("Save screenshot…")),
+                    )
+                    .clicked()
                     && let Some(image) = draft.image.as_ref()
                     && let Some(path) =
                         app.services.pick_save.as_ref().and_then(|pick| pick(&format!("solidcraft-issue-{}.png", app.shot_token), &["png"]))
@@ -489,19 +494,19 @@ pub fn show(app: &mut SolveApp, ctx: &egui::Context) {
                         format!("Could not save screenshot: {}", debug(&result.get("error"), 1000))
                     };
                 }
-                if ui.add_enabled(draft.image.is_some(), egui::Button::new("Remove screenshot")).clicked() {
+                if ui.add_enabled(draft.image.is_some(), egui::Button::new(crate::i18n::tr_label("Remove screenshot"))).clicked() {
                     draft.image = None;
                     draft.texture = None;
                     draft.note = "Screenshot removed from this draft.".into();
                 }
             });
             ui.horizontal_wrapped(|ui| {
-                if ui.button("Copy report").clicked() {
+                if ui.button(crate::i18n::tr_label("Copy report")).clicked() {
                     ctx.copy_text(draft.body.clone());
                     draft.note = "Report copied. Paste it into the GitHub draft if needed.".into();
                 }
                 let (url, copy_needed) = draft_url(&draft.title, &draft.body);
-                if ui.button("Open GitHub draft").clicked() {
+                if ui.button(crate::i18n::tr_label("Open GitHub draft")).clicked() {
                     if copy_needed {
                         ctx.copy_text(draft.body.clone());
                     }
@@ -513,7 +518,7 @@ pub fn show(app: &mut SolveApp, ctx: &egui::Context) {
                     }
                     .into();
                 }
-                close = ui.button("Close draft").clicked();
+                close = ui.button(crate::i18n::tr_label("Close draft")).clicked();
             });
         });
     if open && !close {

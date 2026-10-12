@@ -352,7 +352,7 @@ pub fn rows(app: &mut SolveApp, ui: &mut egui::Ui, k: &mut Mo, inputs: &mut [Sel
             let list = app.session.execute("contact.list", &json!({})).unwrap_or(Value::Null);
             row_label(ui, "Contact");
             let mut on = list.get("enabled").and_then(Value::as_bool).unwrap_or(false);
-            if ui.checkbox(&mut on, "enabled").changed() {
+            if ui.checkbox(&mut on, crate::i18n::tr_label("enabled")).changed() {
                 let _ = app.run("contact.enable_sets", json!({ "enabled": on }));
             }
             ui.end_row();
@@ -366,14 +366,14 @@ pub fn rows(app: &mut SolveApp, ui: &mut egui::Ui, k: &mut Mo, inputs: &mut [Sel
                     if ui.small_button(if off { "Unsuppress" } else { "Suppress" }).clicked() {
                         let _ = app.run("contact.edit", json!({"set": n, "suppressed": !off}));
                     }
-                    if ui.small_button("×").on_hover_text("Delete the set").clicked() {
+                    if ui.small_button("×").on_hover_text(crate::i18n::tr_label("Delete the set")).clicked() {
                         let _ = app.run("contact.edit", json!({"set": n, "delete": true}));
                     }
                 });
                 ui.end_row();
             }
             row_label(ui, "");
-            if ui.button("Check collisions").clicked() {
+            if ui.button(crate::i18n::tr_label("Check collisions")).clicked() {
                 *check = Some(app.session.execute("contact.check", &json!({})).unwrap_or_else(|e| json!({"error": e.to_string()})));
             }
             ui.end_row();
@@ -383,7 +383,7 @@ pub fn rows(app: &mut SolveApp, ui: &mut egui::Ui, k: &mut Mo, inputs: &mut [Sel
                 if let Some(e) = c.get("error").and_then(Value::as_str) {
                     ui.label(RichText::new(e).color(t.error));
                 } else if hits.is_empty() {
-                    ui.label(RichText::new("none").color(t.text_dim));
+                    ui.label(RichText::new(crate::i18n::tr_label("none")).color(t.text_dim));
                 } else {
                     ui.vertical(|ui| {
                         for h in hits {
@@ -413,7 +413,7 @@ pub fn rows(app: &mut SolveApp, ui: &mut egui::Ui, k: &mut Mo, inputs: &mut [Sel
             let moving = joints_moving(app);
             if moving.is_empty() {
                 row_label(ui, "");
-                ui.label(RichText::new("no joint that moves yet").color(t.text_dim));
+                ui.label(RichText::new(crate::i18n::tr_label("no joint that moves yet")).color(t.text_dim));
                 ui.end_row();
                 return enter;
             }
@@ -446,7 +446,7 @@ pub fn rows(app: &mut SolveApp, ui: &mut egui::Ui, k: &mut Mo, inputs: &mut [Sel
                     *playing = false;
                 }
                 ui.add_space(6.0);
-                ui.checkbox(looping, "Loop");
+                ui.checkbox(looping, crate::i18n::tr_label("Loop"));
                 let names: Vec<String> = SPEEDS.iter().map(|x| format!("{x}×")).collect();
                 let refs: Vec<&str> = names.iter().map(String::as_str).collect();
                 combo(ui, "ms_speed", &refs, speed);
@@ -477,7 +477,7 @@ pub fn rows(app: &mut SolveApp, ui: &mut egui::Ui, k: &mut Mo, inputs: &mut [Sel
                 row_label(ui, &format!("Track {}", ti + 1));
                 ui.horizontal(|ui| {
                     combo(ui, &format!("ms_joint{ti}"), &refs, &mut pos);
-                    if ui.small_button("×").on_hover_text("Remove the track").clicked() {
+                    if ui.small_button("×").on_hover_text(crate::i18n::tr_label("Remove the track")).clicked() {
                         remove = Some(ti);
                     }
                 });
@@ -506,7 +506,7 @@ pub fn rows(app: &mut SolveApp, ui: &mut egui::Ui, k: &mut Mo, inputs: &mut [Sel
                 }
                 row_label(ui, "");
                 ui.horizontal(|ui| {
-                    if ui.small_button("Key here").on_hover_text("Add a key at this step with the joint's value now").clicked()
+                    if ui.small_button("Key here").on_hover_text(crate::i18n::tr_label("Add a key at this step with the joint's value now")).clicked()
                         && !tr.points.iter().any(|(s, _)| *s == now)
                     {
                         let unit = app
@@ -520,7 +520,7 @@ pub fn rows(app: &mut SolveApp, ui: &mut egui::Ui, k: &mut Mo, inputs: &mut [Sel
                         tr.points.push((now, format!("0 {unit}")));
                         tr.points.sort_by_key(|p| p.0);
                     }
-                    if ui.small_button("Delete key").clicked() {
+                    if ui.small_button(crate::i18n::tr_label("Delete key")).clicked() {
                         tr.points.retain(|(s, _)| *s != now);
                     }
                 });
@@ -530,7 +530,7 @@ pub fn rows(app: &mut SolveApp, ui: &mut egui::Ui, k: &mut Mo, inputs: &mut [Sel
                 tracks.remove(i);
             }
             row_label(ui, "");
-            if ui.button("Add Key").on_hover_text("Key a joint's value at this step").clicked()
+            if ui.button("Add Key").on_hover_text(crate::i18n::tr_label("Key a joint's value at this step")).clicked()
                 && let Some((ji, _, kind)) = moving.first()
             {
                 let unit = if kind.is_angle(0) { "deg" } else { "mm" };
@@ -620,7 +620,7 @@ pub fn rows(app: &mut SolveApp, ui: &mut egui::Ui, k: &mut Mo, inputs: &mut [Sel
                 ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
                 egui::Grid::new("configuration_table").num_columns(2).min_col_width(210.0).spacing(vec2(10.0, 8.0)).show(ui, |ui| {
                     // Header.
-                    ui.label(RichText::new("Configuration").strong());
+                    ui.label(RichText::new(crate::i18n::tr_label("Configuration")).strong());
                     ui.horizontal(|ui| {
                         for c in &tb.columns {
                             ui.allocate_ui_with_layout(vec2(190.0, 22.0), egui::Layout::left_to_right(egui::Align::Center), |ui| {
@@ -639,7 +639,7 @@ pub fn rows(app: &mut SolveApp, ui: &mut egui::Ui, k: &mut Mo, inputs: &mut [Sel
                                     .map(str::to_string)
                                     .unwrap_or(label);
                                 ui.add_sized(vec2(156.0, 22.0), egui::Label::new(RichText::new(label).strong()).truncate()).on_hover_text(c);
-                                if ui.small_button("×").on_hover_text("Remove the column").clicked() {
+                                if ui.small_button("×").on_hover_text(crate::i18n::tr_label("Remove the column")).clicked() {
                                     let key = if kind == "suppress" { "feature" } else { kind };
                                     run(
                                         app,
@@ -661,11 +661,11 @@ pub fn rows(app: &mut SolveApp, ui: &mut egui::Ui, k: &mut Mo, inputs: &mut [Sel
                             )
                             .on_hover_text(name);
                             if active {
-                                ui.label(RichText::new("Active").color(t.accent));
-                                if v.get("matches").and_then(Value::as_bool) == Some(false) && ui.button("Apply").clicked() {
+                                ui.label(RichText::new(crate::i18n::tr_label("Active")).color(t.accent));
+                                if v.get("matches").and_then(Value::as_bool) == Some(false) && ui.button(crate::i18n::tr_label("Apply")).clicked() {
                                     run(app, error, "config.activate", json!({ "row": name }));
                                 }
-                            } else if ui.button("Activate").clicked() {
+                            } else if ui.button(crate::i18n::tr_label("Activate")).clicked() {
                                 run(app, error, "config.activate", json!({ "row": name }));
                             }
                         });
@@ -735,7 +735,7 @@ pub fn rows(app: &mut SolveApp, ui: &mut egui::Ui, k: &mut Mo, inputs: &mut [Sel
                                     }
                                 });
                             }
-                            if ui.small_button("×").on_hover_text("Delete the row").clicked() {
+                            if ui.small_button("×").on_hover_text(crate::i18n::tr_label("Delete the row")).clicked() {
                                 run(app, error, "config.row", json!({"name": name, "delete": true}));
                             }
                         });
@@ -746,8 +746,8 @@ pub fn rows(app: &mut SolveApp, ui: &mut egui::Ui, k: &mut Mo, inputs: &mut [Sel
             // New row (a copy of the active one) and new column.
             ui.horizontal(|ui| {
                 ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
-                ui.add(egui::TextEdit::singleline(new_row).hint_text("new configuration").desired_width(160.0));
-                if ui.button("Add Row").on_hover_text("A new configuration, a copy of the active one").clicked() {
+                ui.add(egui::TextEdit::singleline(new_row).hint_text(crate::i18n::tr_label("new configuration")).desired_width(160.0));
+                if ui.button("Add Row").on_hover_text(crate::i18n::tr_label("A new configuration, a copy of the active one")).clicked() {
                     let name = if new_row.trim().is_empty() {
                         (tb.rows.len() + 1..).map(|k| format!("Configuration{k}")).find(|n| !tb.rows.iter().any(|r| &r.0 == n)).unwrap_or_default()
                     } else {
@@ -800,7 +800,7 @@ pub fn rows(app: &mut SolveApp, ui: &mut egui::Ui, k: &mut Mo, inputs: &mut [Sel
                             }
                         }
                         ui.menu_button("Face Appearance", |ui| {
-                            ui.label("Semantic faces share their appearance across instances.");
+                            ui.label(crate::i18n::tr_label("Semantic faces share their appearance across instances."));
                             let state = app.session.model.state();
                             for body in &state.bodies {
                                 if body.body.is_mesh() {

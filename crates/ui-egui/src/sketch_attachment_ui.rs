@@ -153,7 +153,7 @@ pub fn panel(app: &mut SolveApp, ctx: &egui::Context, at: Pos2) {
                 Some(*plane)
             }
             FaceAttachmentStatus::Lost { message, repair_plane } => {
-                ui.label(RichText::new("Face attachment lost").color(t.error));
+                ui.label(RichText::new(crate::i18n::tr_label("Face attachment lost")).color(t.error));
                 ui.label(message);
                 if repair_plane.is_some() {
                     ui.label("The dashed sketch is a saved plane guide. Select a new face to repair the attachment.");
@@ -167,7 +167,7 @@ pub fn panel(app: &mut SolveApp, ctx: &egui::Context, at: Pos2) {
                 *plane
             }
             FaceAttachmentStatus::Fixed { plane } => {
-                ui.label("Sketch plane has no body-face attachment.");
+                ui.label(crate::i18n::tr_label("Sketch plane has no body-face attachment."));
                 *plane
             }
         };
@@ -175,7 +175,7 @@ pub fn panel(app: &mut SolveApp, ctx: &egui::Context, at: Pos2) {
         if matches!(&status, FaceAttachmentStatus::Lost { repair_plane: None, .. }) {
             let author = app.session.doc.feature(sketch).map(|feature| feature.component);
             let available = author == Some(app.session.active_component);
-            if ui.add_enabled(available, egui::Button::new("Use active author placement")).clicked() {
+            if ui.add_enabled(available, egui::Button::new(crate::i18n::tr_label("Use active author placement"))).clicked() {
                 draft.author_path = Some(app.session.active_occurrence_path.clone().unwrap_or_default());
                 draft.error = None;
             }
@@ -196,20 +196,20 @@ pub fn panel(app: &mut SolveApp, ctx: &egui::Context, at: Pos2) {
                 draft.choose(json!(feature.name), feature.name.clone());
             }
         }
-        if ui.add_enabled(selected.is_some(), egui::Button::new("Reattach selected face")).clicked()
+        if ui.add_enabled(selected.is_some(), egui::Button::new(crate::i18n::tr_label("Reattach selected face"))).clicked()
             && let Some(selection @ Sel::Face { .. }) = &selected
             && let Some(plane) = face_plane(app, selection)
         {
             let label = face_label(app, selection);
             draft.choose(plane, label);
         }
-        if ui.add_enabled(saved_plane.is_some(), egui::Button::new("Use saved fixed plane")).clicked()
+        if ui.add_enabled(saved_plane.is_some(), egui::Button::new(crate::i18n::tr_label("Use saved fixed plane"))).clicked()
             && let Some(plane) = saved_plane
             && let Err(error) = draft.choose_saved_fixed(app, plane)
         {
             draft.error = Some(error);
         }
-        if ui.add_enabled(selected.is_some(), egui::Button::new("Use selected face as fixed plane")).clicked()
+        if ui.add_enabled(selected.is_some(), egui::Button::new(crate::i18n::tr_label("Use selected face as fixed plane"))).clicked()
             && let Some(selection) = &selected
             && let Some(mut plane) = face_plane(app, selection)
         {
@@ -224,10 +224,10 @@ pub fn panel(app: &mut SolveApp, ctx: &egui::Context, at: Pos2) {
             ui.label(RichText::new(error).color(t.error));
         }
         ui.horizontal(|ui| {
-            if ui.add_enabled(draft.candidate.is_some() && app.preview.error.is_none(), egui::Button::new("Apply")).clicked() {
+            if ui.add_enabled(draft.candidate.is_some() && app.preview.error.is_none(), egui::Button::new(crate::i18n::tr_label("Apply"))).clicked() {
                 apply = true;
             }
-            if ui.button("Cancel").clicked() {
+            if ui.button(crate::i18n::tr_label("Cancel")).clicked() {
                 cancel = true;
             }
         });

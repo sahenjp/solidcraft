@@ -217,7 +217,7 @@ pub fn show(app: &mut SolveApp, ctx: &egui::Context) {
                 }
             });
         });
-        cancel = ui.button("Cancel").clicked();
+        cancel = ui.button(crate::i18n::tr_label("Cancel")).clicked();
     });
     if cancel {
         // Keep the running job until it exits: cancelling must not allow another large

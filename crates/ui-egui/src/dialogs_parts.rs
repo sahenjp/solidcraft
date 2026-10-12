@@ -123,7 +123,7 @@ pub fn rows(app: &mut SolveApp, ui: &mut egui::Ui, k: &mut Pt, inputs: &[SelInpu
     };
     if lib.is_empty() {
         row_label(ui, "");
-        ui.label(RichText::new("the parts library is not available").color(t.text_dim));
+        ui.label(RichText::new(crate::i18n::tr_label("the parts library is not available")).color(t.text_dim));
         ui.end_row();
         return false;
     }
@@ -154,7 +154,7 @@ pub fn rows(app: &mut SolveApp, ui: &mut egui::Ui, k: &mut Pt, inputs: &[SelInpu
         ui.end_row();
     }
     row_label(ui, "Name");
-    ui.add(egui::TextEdit::singleline(&mut k.name).hint_text("automatic"));
+    ui.add(egui::TextEdit::singleline(&mut k.name).hint_text(crate::i18n::tr_label("automatic")));
     ui.end_row();
     // The part, and its table values.
     let key = (k.family, k.size, k.length);
@@ -178,7 +178,7 @@ pub fn rows(app: &mut SolveApp, ui: &mut egui::Ui, k: &mut Pt, inputs: &[SelInpu
             ui.add(egui::Image::new(&tx).fit_to_exact_size(vec2(180.0, 112.0)).corner_radius(4.0));
         }
         None => {
-            ui.label(RichText::new("no picture").color(t.text_dim));
+            ui.label(RichText::new(crate::i18n::tr_label("no picture")).color(t.text_dim));
         }
     }
     ui.end_row();
@@ -193,7 +193,7 @@ pub fn rows(app: &mut SolveApp, ui: &mut egui::Ui, k: &mut Pt, inputs: &[SelInpu
     }
     if inputs.first().is_some_and(|i| i.items.is_empty()) {
         row_label(ui, "");
-        ui.label(RichText::new("pick a hole to seat it, or OK places it at the origin").color(t.text_dim));
+        ui.label(RichText::new(crate::i18n::tr_label("pick a hole to seat it, or OK places it at the origin")).color(t.text_dim));
         ui.end_row();
     }
     false

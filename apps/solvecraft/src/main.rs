@@ -188,7 +188,6 @@ fn main() -> eframe::Result {
         "SolidCraft",
         options,
         Box::new(move |cc| {
-            solvecraft_ui_egui::fonts::setup_fonts(&cc.egui_ctx);
             let mut app = SolveApp::new(Session::default(), services());
             app.custom_titlebar = CUSTOM_TITLEBAR;
             app.integrated_titlebar = cfg!(target_os = "macos");

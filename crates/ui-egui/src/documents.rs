@@ -372,7 +372,7 @@ pub fn tabs(app: &mut SolveApp, ui: &mut egui::Ui, r: Rect, x0: f32, x1: f32) {
         let s = Stroke::new(1.3, if active { t.text_dim } else { t.app_bar_text });
         ui.painter().line_segment([c - vec2(3.5, 3.5), c + vec2(3.5, 3.5)], s);
         ui.painter().line_segment([c - vec2(3.5, -3.5), c + vec2(3.5, -3.5)], s);
-        if xresp.on_hover_text("Close").clicked() {
+        if xresp.on_hover_text(crate::i18n::tr_label("Close")).clicked() {
             shut = Some(i);
         } else if resp.on_hover_text(name.as_str()).clicked() {
             pick = Some(i);
@@ -388,7 +388,7 @@ pub fn tabs(app: &mut SolveApp, ui: &mut egui::Ui, r: Rect, x0: f32, x1: f32) {
         }
         ui.painter().text(mr.center(), egui::Align2::CENTER_CENTER, format!("»{}", n - shown), FontId::proportional(12.0), t.app_bar_text);
         let id = egui::Id::new("sc_doc_more");
-        if mresp.clone().on_hover_text("All open designs").clicked() {
+        if mresp.clone().on_hover_text(crate::i18n::tr_label("All open designs")).clicked() {
             ui.ctx().data_mut(|d| d.insert_temp(id, !d.get_temp::<bool>(id).unwrap_or(false)));
         }
         if ui.ctx().data(|d| d.get_temp::<bool>(id).unwrap_or(false)) {
@@ -424,7 +424,7 @@ pub fn tabs(app: &mut SolveApp, ui: &mut egui::Ui, r: Rect, x0: f32, x1: f32) {
     let s = Stroke::new(1.6, t.app_bar_text);
     ui.painter().line_segment([c - vec2(6.0, 0.0), c + vec2(6.0, 0.0)], s);
     ui.painter().line_segment([c - vec2(0.0, 6.0), c + vec2(0.0, 6.0)], s);
-    if presp.on_hover_text("New Design (Ctrl+N)").clicked() {
+    if presp.on_hover_text(crate::i18n::tr_label("New Design (Ctrl+N)")).clicked() {
         new_design(app);
     }
     if let Some(i) = shut {

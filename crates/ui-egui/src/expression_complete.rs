@@ -131,7 +131,7 @@ pub(crate) fn complete(ui: &mut egui::Ui, resp: &egui::Response, text: &mut Stri
                         pick = Some(suggestion.text.clone());
                     }
                 }
-                ui.label(RichText::new("↑ ↓ choose · Enter / Tab complete · Esc dismiss").small().color(t.text_dim));
+                ui.label(RichText::new(crate::i18n::tr_label("↑ ↓ choose · Enter / Tab complete · Esc dismiss")).small().color(t.text_dim));
             });
         },
     );

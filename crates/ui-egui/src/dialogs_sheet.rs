@@ -205,7 +205,7 @@ pub fn rows(app: &mut SolveApp, ui: &mut egui::Ui, k: &mut Sm, inputs: &mut [Sel
                     combo(ui, "sm_pos", &POSITION_LABELS, position);
                     ui.end_row();
                     row_label(ui, "Bend Radius");
-                    let r = ui.add(egui::TextEdit::singleline(radius).hint_text("from the rule"));
+                    let r = ui.add(egui::TextEdit::singleline(radius).hint_text(crate::i18n::tr_label("from the rule")));
                     crate::params_dialog::complete(ui, &r, radius);
                     enter |= r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
                     ui.end_row();
@@ -227,13 +227,13 @@ pub fn rows(app: &mut SolveApp, ui: &mut egui::Ui, k: &mut Sm, inputs: &mut [Sel
         }
         Sm::Hem { length, gap, flip } => {
             row_label(ui, "Type");
-            ui.label("Flat");
+            ui.label(crate::i18n::tr_label("Flat"));
             ui.end_row();
             row_label(ui, "Length");
             enter |= field(ui, length);
             ui.end_row();
             row_label(ui, "Gap");
-            let r = ui.add(egui::TextEdit::singleline(gap).hint_text("from the rule"));
+            let r = ui.add(egui::TextEdit::singleline(gap).hint_text(crate::i18n::tr_label("from the rule")));
             crate::params_dialog::complete(ui, &r, gap);
             enter |= r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
             ui.end_row();
@@ -249,7 +249,7 @@ pub fn rows(app: &mut SolveApp, ui: &mut egui::Ui, k: &mut Sm, inputs: &mut [Sel
             enter |= field(ui, angle);
             ui.end_row();
             row_label(ui, "Bend Radius");
-            let r = ui.add(egui::TextEdit::singleline(radius).hint_text("from the rule"));
+            let r = ui.add(egui::TextEdit::singleline(radius).hint_text(crate::i18n::tr_label("from the rule")));
             crate::params_dialog::complete(ui, &r, radius);
             enter |= r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
             ui.end_row();
@@ -301,7 +301,7 @@ pub fn rows(app: &mut SolveApp, ui: &mut egui::Ui, k: &mut Sm, inputs: &mut [Sel
             ui.end_row();
             if *pick < rules.len() && !app.session.doc.sheet.rules.is_empty() {
                 row_label(ui, "");
-                if ui.button("Delete rule").clicked() {
+                if ui.button(crate::i18n::tr_label("Delete rule")).clicked() {
                     let n = rules.get(*pick).map(|r| r.name.clone()).unwrap_or_default();
                     match app.run("sheet.manage_rules", json!({"name": n, "delete": true})) {
                         Ok(_) => {
@@ -359,12 +359,12 @@ pub fn rows(app: &mut SolveApp, ui: &mut egui::Ui, k: &mut Sm, inputs: &mut [Sel
                         ui.end_row();
                     }
                     row_label(ui, "");
-                    if ui.button("Export DXF…").clicked() {
+                    if ui.button(crate::i18n::tr_label("Export DXF…")).clicked() {
                         *status = Some(export_flat(app, v["body"].as_str().unwrap_or(""), "dxf"));
                     }
                     ui.end_row();
                     row_label(ui, "");
-                    if ui.button("Export Bend Table…").clicked() {
+                    if ui.button(crate::i18n::tr_label("Export Bend Table…")).clicked() {
                         *status = Some(export_flat(app, v["body"].as_str().unwrap_or(""), "csv"));
                     }
                     ui.end_row();

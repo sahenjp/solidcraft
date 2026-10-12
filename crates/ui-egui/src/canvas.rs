@@ -589,10 +589,10 @@ fn draw_revolve(
                 } else {
                     "Choose target".into()
                 };
-                ui.label(text).on_hover_text("Determined by To Object. Choose Angle to edit the angular extent.");
+                ui.label(text).on_hover_text(crate::i18n::tr_label("Determined by To Object. Choose Angle to edit the angular extent."));
             } else if let Kind::Revolve { angle, .. } = &mut d.kind {
                 ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new("Angle").color(Tokens::get().text_dim).size(11.5));
+                    ui.label(egui::RichText::new(crate::i18n::tr_label("Angle")).color(Tokens::get().text_dim).size(11.5));
                     let id = egui::Id::new("sc_canvas_value");
                     let response = ui.add(egui::TextEdit::singleline(angle).id(id).desired_width(72.0));
                     crate::params_dialog::complete(ui, &response, angle);

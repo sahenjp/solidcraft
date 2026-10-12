@@ -313,9 +313,12 @@ mod tests {
                     ..Default::default()
                 };
                 output = ctx.run_ui(raw, |ui| {
-                    crate::frame::window(ui.ctx(), "Parameters", crate::frame::Width::Normal).fade_in(false).show(ui.ctx(), |ui| {
-                        ui.label("Parameter values");
-                    });
+                    crate::frame::window(ui.ctx(), crate::i18n::tr_label("Parameters"), crate::frame::Width::Normal).fade_in(false).show(
+                        ui.ctx(),
+                        |ui| {
+                            ui.label(crate::i18n::tr_label("Parameter values"));
+                        },
+                    );
                 });
                 output.textures_delta.clear();
             }

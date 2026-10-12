@@ -398,7 +398,7 @@ pub fn rows(app: &mut SolveApp, ui: &mut egui::Ui, k: &mut Asm, inputs: &mut [Se
     match k {
         Asm::NewComponent { name, activate } => {
             row_label(ui, "Name");
-            let r = ui.add(egui::TextEdit::singleline(name).hint_text("Component1"));
+            let r = ui.add(egui::TextEdit::singleline(name).hint_text(crate::i18n::tr_label("Component1")));
             enter |= r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
             ui.end_row();
             row_label(ui, "Activate");
@@ -437,7 +437,7 @@ pub fn rows(app: &mut SolveApp, ui: &mut egui::Ui, k: &mut Asm, inputs: &mut [Se
             if kind != JointKind::Rigid {
                 row_label(ui, "Animate");
                 let label = if f.animate { "■ Stop" } else { "▶ Play" };
-                if ui.button(label).on_hover_text("Play the joint's motion in the view").clicked() {
+                if ui.button(label).on_hover_text(crate::i18n::tr_label("Play the joint's motion in the view")).clicked() {
                     f.animate = !f.animate;
                 }
                 ui.end_row();
@@ -467,7 +467,7 @@ pub fn rows(app: &mut SolveApp, ui: &mut egui::Ui, k: &mut Asm, inputs: &mut [Se
         }
         Asm::JointOrigin { name, .. } => {
             row_label(ui, "Name");
-            let r = ui.add(egui::TextEdit::singleline(name).hint_text("Joint Origin1"));
+            let r = ui.add(egui::TextEdit::singleline(name).hint_text(crate::i18n::tr_label("Joint Origin1")));
             enter |= r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
             ui.end_row();
         }
@@ -477,7 +477,7 @@ pub fn rows(app: &mut SolveApp, ui: &mut egui::Ui, k: &mut Asm, inputs: &mut [Se
             let list = movable(s);
             if list.is_empty() {
                 row_label(ui, "");
-                ui.label(RichText::new("no joint that moves yet").color(t.text_dim));
+                ui.label(RichText::new(crate::i18n::tr_label("no joint that moves yet")).color(t.text_dim));
                 ui.end_row();
                 return false;
             }
@@ -552,7 +552,7 @@ pub fn rows(app: &mut SolveApp, ui: &mut egui::Ui, k: &mut Asm, inputs: &mut [Se
             let joints = &s.doc.assembly.joints;
             if joints.len() < 2 {
                 row_label(ui, "");
-                ui.label(RichText::new("needs two joints").color(t.text_dim));
+                ui.label(RichText::new(crate::i18n::tr_label("needs two joints")).color(t.text_dim));
                 ui.end_row();
                 return false;
             }
@@ -637,12 +637,12 @@ fn interference_rows(ui: &mut egui::Ui, r: &Value) {
     ui.end_row();
     if hits.is_empty() {
         row_label(ui, "Result");
-        ui.label(RichText::new("no interference").color(t.text_dim));
+        ui.label(RichText::new(crate::i18n::tr_label("no interference")).color(t.text_dim));
         ui.end_row();
         return;
     }
     row_label(ui, "Interferes");
-    ui.label(RichText::new("Volume").strong());
+    ui.label(RichText::new(crate::i18n::tr_label("Volume")).strong());
     ui.end_row();
     for h in hits {
         row_label(ui, &format!("{} · {}", h["a"].as_str().unwrap_or(""), h["b"].as_str().unwrap_or("")));
@@ -983,11 +983,11 @@ fn joint_menu(
     open: &mut Option<Dialog>,
     run: &mut Option<(&'static str, Value)>,
 ) {
-    if ui.button("Edit Joint").clicked() {
+    if ui.button(crate::i18n::tr_label("Edit Joint")).clicked() {
         *open = edit_joint(app, id);
         ui.close();
     }
-    if kind != JointKind::Rigid && ui.button("Drive Joint").clicked() {
+    if kind != JointKind::Rigid && ui.button(crate::i18n::tr_label("Drive Joint")).clicked() {
         *open = drive_joint(app, id);
         ui.close();
     }
@@ -996,7 +996,7 @@ fn joint_menu(
         ui.close();
     }
     ui.separator();
-    if ui.button("Delete").clicked() {
+    if ui.button(crate::i18n::tr_label("Delete")).clicked() {
         *run = Some(("joint.delete", json!({ "joint": id })));
         ui.close();
     }

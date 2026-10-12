@@ -57,7 +57,7 @@ pub fn show(app: &mut SolveApp, ctx: &egui::Context) {
     let dir = app.autosave.as_ref().map(|a| a.dir.clone()).or_else(recovery::default_dir);
     let mut act: Option<(Entry, bool)> = None;
     let mut later = false;
-    crate::frame::window(ctx, RichText::new("Recover unsaved design?").strong().size(13.0), crate::frame::Width::Normal)
+    crate::frame::window(ctx, RichText::new(crate::i18n::tr_label("Recover unsaved design?")).strong().size(13.0), crate::frame::Width::Normal)
         .collapsible(false)
         .resizable(false)
         .min_width(420.0)
@@ -70,17 +70,17 @@ pub fn show(app: &mut SolveApp, ctx: &egui::Context) {
                 let file = e.path.clone().unwrap_or_else(|| "never saved".into());
                 ui.label(RichText::new(format!("{file} · {} features · autosaved {}", e.features, ago(e.saved_at))).small().weak());
                 ui.horizontal(|ui| {
-                    if ui.button("Recover").clicked() {
+                    if ui.button(crate::i18n::tr_label("Recover")).clicked() {
                         act = Some((e.clone(), true));
                     }
-                    if ui.button("Discard").clicked() {
+                    if ui.button(crate::i18n::tr_label("Discard")).clicked() {
                         act = Some((e.clone(), false));
                     }
                 });
                 ui.separator();
             }
             ui.horizontal(|ui| {
-                if ui.button("Later").on_hover_text("Keep them; ask again next launch").clicked() {
+                if ui.button("Later").on_hover_text(crate::i18n::tr_label("Keep them; ask again next launch")).clicked() {
                     later = true;
                 }
             });

@@ -229,17 +229,17 @@ pub fn timeline(app: &mut SolveApp, ui: &mut egui::Ui) {
                         _ => None,
                     };
                     resp.context_menu(|ui| {
-                        if ui.button("Edit Feature").clicked() {
+                        if ui.button(crate::i18n::tr_label("Edit Feature")).clicked() {
                             edit = Some(*id);
                             ui.close();
                         }
                         if let Some(sk) = sketch_of
-                            && ui.button("Edit Profile Sketch").clicked()
+                            && ui.button(crate::i18n::tr_label("Edit Profile Sketch")).clicked()
                         {
                             app.edit_sketch(sk);
                             ui.close();
                         }
-                        if ui.button("Rename").clicked() {
+                        if ui.button(crate::i18n::tr_label("Rename")).clicked() {
                             app.dialog = Some(crate::dialogs::Dialog::rename(*id, name));
                             ui.close();
                         }
@@ -247,16 +247,16 @@ pub fn timeline(app: &mut SolveApp, ui: &mut egui::Ui) {
                             let _ = app.run("timeline.suppress", json!({"feature": id}));
                             ui.close();
                         }
-                        if ui.button("Roll History Marker Here").clicked() {
+                        if ui.button(crate::i18n::tr_label("Roll History Marker Here")).clicked() {
                             let _ = app.run("timeline.roll_to", json!({ "feature": id }));
                             ui.close();
                         }
-                        if ui.button("Find in Browser").clicked() {
+                        if ui.button(crate::i18n::tr_label("Find in Browser")).clicked() {
                             find_in_browser(app, *id);
                             ui.close();
                         }
                         ui.separator();
-                        if ui.button("Delete").clicked() {
+                        if ui.button(crate::i18n::tr_label("Delete")).clicked() {
                             delete_feature(app, *id);
                             ui.close();
                         }
@@ -275,7 +275,7 @@ pub fn timeline(app: &mut SolveApp, ui: &mut egui::Ui) {
                     }
                     let col = if resp.hovered() || drag == Some(Drag::Marker) { t.accent } else { t.timeline_marker };
                     p.rect_filled(mr, 1.0, col);
-                    resp.on_hover_text("History marker: drag to roll the model back; new features go here");
+                    resp.on_hover_text(crate::i18n::tr_label("History marker: drag to roll the model back; new features go here"));
                 }
                 let content_end = crate::dialogs_assembly::timeline_joints(app, ui, &p, end + 10.0, r);
                 // The scroll range follows the drawn content (the buttons don't take layout space themselves).

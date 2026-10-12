@@ -44,7 +44,7 @@ fn translated_dialog_buttons_do_not_wrap() {
         }
     }
     let mut h = Harness::new();
-    crate::fonts::setup_fonts(&h.ctx);
+    crate::fonts::setup_fonts(&h.ctx, "ja");
     h.app.preferences.language = "ja".into();
     h.app.home.open = false;
     h.call("ui.start", json!({"command":"solid.extrude"}));

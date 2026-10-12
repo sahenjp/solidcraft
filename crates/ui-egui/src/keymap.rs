@@ -146,14 +146,18 @@ pub fn page(app: &mut SolveApp, ui: &mut egui::Ui) {
     {
         {
             ui.horizontal(|ui| {
-                ui.add(egui::TextEdit::singleline(&mut app.keymap.filter).hint_text("Filter commands or keys").desired_width(300.0));
-                if !app.keymap.read_only && ui.button("Reset All").clicked() {
+                ui.add(
+                    egui::TextEdit::singleline(&mut app.keymap.filter)
+                        .hint_text(crate::i18n::tr_label("Filter commands or keys"))
+                        .desired_width(300.0),
+                );
+                if !app.keymap.read_only && ui.button(crate::i18n::tr_label("Reset All")).clicked() {
                     action = Some((String::new(), "reset_all"));
                 }
-                if ui.button("Export…").on_hover_text("Keys, S box favourites and the toolbar, as a file").clicked() {
+                if ui.button("Export…").on_hover_text(crate::i18n::tr_label("Keys, S box favourites and the toolbar, as a file")).clicked() {
                     action = Some((String::new(), "export"));
                 }
-                if !app.keymap.read_only && ui.button("Import…").clicked() {
+                if !app.keymap.read_only && ui.button(crate::i18n::tr_label("Import…")).clicked() {
                     action = Some((String::new(), "import"));
                 }
             });
@@ -165,7 +169,7 @@ pub fn page(app: &mut SolveApp, ui: &mut egui::Ui) {
                     if ui.button(format!("Use {key} here anyway")).clicked() {
                         action = Some((format!("{id}\n{key}"), "replace"));
                     }
-                    if ui.button("Cancel").clicked() {
+                    if ui.button(crate::i18n::tr_label("Cancel")).clicked() {
                         action = Some((String::new(), "cancel"));
                     }
                 });
@@ -196,14 +200,14 @@ pub fn page(app: &mut SolveApp, ui: &mut egui::Ui) {
                             continue;
                         }
                         let b = egui::Button::new(RichText::new(text).color(if changed { t.accent } else { t.text })).min_size(egui::vec2(80.0, 0.0));
-                        if ui.add(b).on_hover_text("Click, then press the new key").clicked() {
+                        if ui.add(b).on_hover_text(crate::i18n::tr_label("Click, then press the new key")).clicked() {
                             action = Some((c.id.to_string(), "capture"));
                         }
                         ui.horizontal(|ui| {
-                            if ui.add_enabled(!key.is_empty(), egui::Button::new("Clear").small()).clicked() {
+                            if ui.add_enabled(!key.is_empty(), egui::Button::new(crate::i18n::tr_label("Clear")).small()).clicked() {
                                 action = Some((c.id.to_string(), "clear"));
                             }
-                            if ui.add_enabled(changed, egui::Button::new("Reset").small()).clicked() {
+                            if ui.add_enabled(changed, egui::Button::new(crate::i18n::tr_label("Reset")).small()).clicked() {
                                 action = Some((c.id.to_string(), "reset"));
                             }
                         });
