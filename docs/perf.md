@@ -158,7 +158,8 @@ each body is identified by the evaluation that produced it (bodies a feature pas
 unchanged keep their identity). The same feature on the same inputs is never evaluated twice:
 setting a value back, undo, redo, a preview followed by the same command, and the repeated
 evaluations while a script builds the design all reuse earlier results. The cache is shared by a
-model and its copies (previews, scratch sessions) and keeps the last 4096 results.
+model and its copies (previews, scratch sessions) and keeps up to 4096 results and 64 MiB of
+them, whichever comes first (see [performance-optimization.md](performance-optimization.md)).
 
 An edit still recomputes the edited feature and every later feature whose starting model
 changed; in these parts every later feature works on the edited body, so early edits recompute
@@ -208,3 +209,124 @@ Pi STEP (27 bodies) into the case in 279 ms; undo restored the original two bodi
 full 77 MB board STEP (2689 solid definitions, 45,689 faces) still had not completed after
 300 s. Its window continued handling inspection and Cancel, and cancelling preserved the
 case. Complex STEP construction remains an outstanding kernel performance problem.
+
+## Boolean fast path for prism pairs (2026-10-12)
+
+A plate and the tool through it are decided exactly in 2D by `prism::prism_boolean`. That route
+needs no mesh of either operand, while the sampled shortcuts in `boolean_whole` (`trivial`,
+and `mismatch` inside its result check) need a refined mesh of both at the meeting tolerance.
+For a plate with many holes that mesh is most of what a boolean costs - on the 100-hole plate
+the operand meshes and the result check were 11 s of 17 s - and a pattern or a multi-profile
+sketch rebuilds the whole target's mesh once per tool. The prism route now runs before them for
+a cut or an intersection, measuring the operands the way every result volume in that function
+already is; a pair it declines still takes the previous path, unchanged, `trivial` included. A
+union keeps the previous order: parts that stay apart are exactly what `trivial` answers at
+once.
+
+Linux x86_64, release profile, one process per evaluation, both binaries in one paired run,
+median of three, no concurrent build (`07e263d` against the finished tree):
+
+| Design | Before | After | |
+|---|---:|---:|---|
+| 100 holes cut into one plate | 17.9-24.9 s, median 19.7 | 4.30-4.39 s | at least 4.2x |
+| vent plate, 80-cut pattern | 0.85-0.88 s | 0.36-0.37 s | 2.3x |
+| vent plate sample | 0.17-0.18 s | 0.06 s | 2.8x |
+| bolted flange sample (circular pattern) | 2.06-2.15 s | 1.91-1.95 s | 1.07x |
+| 196-copy body pattern | 6.64-6.78 s | 6.36-6.62 s | unchanged |
+| 121-feature join chain | 9.0-11.7 s | 8.26-8.35 s | unchanged |
+| sensor enclosure example | 7.41-7.58 s | 7.62-7.74 s | unchanged |
+| loft cut beside round hole (regression sample) | 0.37-0.39 s | 0.36-0.37 s | unchanged |
+
+An earlier paired run of the same baseline measured 16.7-17.4 s against 4.2-4.5 s, so the
+identity rule below costs nothing measurable. The baseline is the noisy side of every row (the
+121-feature chain measured 8.0-11.7 s across the two runs, wider than the difference to the
+finished tree); the finished tree repeats inside 2% on the cases it speeds up.
+
+Peak RSS is unchanged or slightly lower: 123.5 MB to 116.5 MB (-5.7%) on the 100-hole plate,
+63.9 to 61.5 MB on the 196-copy pattern, 19.2 to 17.3 MB on the vent plate sample. The sensor
+enclosure spreads 204-238 MB in both binaries, wider than any difference between them. The
+change removes repeated triangulation, not retained data.
+
+The evaluation output is unchanged - same bodies, names, face/edge/vertex counts, bounds,
+volumes, areas, centroids, masses and per-feature errors - across the six bundled samples, the
+example designs and the generated corpus. Two designs differ only in the last bits: the 100-hole
+plate by 1.3e-10 relative on volume and area and 2e-8 mm on its centre of mass, and
+`shallow_loft_cut_from_top_face` by 3.8e-16 relative. The plate's bounding-box minimum, which
+the baseline reported as -3.5e-15, is now exactly 0, its bottom face plane.
+
+A pair the route answers is accepted only when its volume agrees with the operand volumes the way
+the sampled path's would, and only when the result is not a look-alike rebuild of an operand. A
+tool that misses its target, in section or part-way along its extrusion, leaves the target as it
+is, and `trivial` says so by reusing the very same body; the 2D route would rebuild that body -
+the same shape on new faces - which changes the identity an untouched body keeps through a
+timeline, and with it its STEP export. Those pairs go back to the path below, which decides them
+exactly as it always did. The check costs one coarse mesh of each new result: the operands'
+volumes are remembered per body (`Body::volume_at`), so a pattern cutting one target measures
+each tool and result once.
+
+`ops::prism_fast_path_tests` pins the configurations the reordering touches: a bore through a
+plate, two bodies that stay apart, a tool wholly inside its target (a closed void, not a through
+cut), and a tool that misses its target, which must leave the very same body behind.
+
+## Large STEP imports (2026-10-12)
+
+A STEP file is read in three stages: the p21 text is parsed, every representation item is
+converted to a B-rep, and `Body::new` runs per body. On a generated 31 MB file (2,500 solids,
+22,500 faces, 483,358 entities - the closest stand-in this machine can build for the private
+77 MB board file that had not finished in 300 s) the text is 13% of the 3.0 s the import takes and
+**54% is `Body::new`'s orientation mesh**, a kernel-wide design point this pass did not touch
+(see [performance-optimization.md](performance-optimization.md)). Three redundant copies around
+it were removed:
+
+- `step_in::Reader::item_solid` deep-cloned every converted B-rep into a cache that is never
+  evicted and kept the clone for the whole import, although a flat file asks for each item once.
+  An item the file cannot ask for twice - no assembly occurrence, one representation, that
+  representation reached from one product definition - is now handed over as its single
+  reference. A file that can repeat a representation keeps every conversion exactly as before,
+  and a walk budget falls back to that behaviour wholesale, so a misjudged file costs one
+  reconversion and nothing else.
+- `step_in::brep::read_item` built every solid with `Solid::try_new(shells.clone())` only to fall
+  back to `Solid::new_unchecked(shells)` when a shell failed a check. truck's `try_new` checks
+  four shell properties and returns the shells unchanged
+  (`truck-topology-0.6.0/src/solid.rs`), so the same four checks now run on the borrowed shells
+  and the deep clone of every face, edge, vertex, curve and surface per item is gone.
+- `Body::unmeshed_faces` counted faces missing from a mesh at `span/100`, while the orientation
+  mesh in `Body::new` runs at `span/100` clamped between 0.001 and 1 mm. Above a 100 mm span the
+  two never matched, so the count missed the cache and every large body was meshed a second time:
+  measured at 90.8 ms for 961 boxes of 200 mm. Both now use one `orientation_tolerance`.
+
+Linux x86_64, release profile as committed before the change below, median of three, one process
+per run:
+
+| | before | after | |
+|---|---:|---:|---|
+| 2,500-solid 31 MB STEP, `--parse-only` | 2.970 s, 428.5 MB | 2.910 s, 423.2 MB | -2.0% / -1.2% |
+| 961 boxes of 200 mm, missing-face pass | 90.8 ms | 0.0 ms | second mesh removed |
+
+The remaining win is small because the removed copy is about 20 us per solid; the orientation mesh
+that dominates the import is untouched. Identity: `eval` output is byte-identical for eight
+designs (256, 961, 2,500, 2,500 and 500 imported bodies, `holes_100`, `many_bodies_120`,
+`many_sketches_30`) and three STEP in/out round trips are byte-identical. The missing-face count
+is unchanged on every fixture measured, and a kernel test pins that the orientation mesh's count
+is the one `unmeshed_faces` answers with.
+
+## Release profile (2026-10-12)
+
+`[profile.release]` is now fat LTO with one codegen unit and `strip = "symbols"`; opt-level 3 and
+debug 0 are unchanged and no `panic` key was added, because `Session::execute` keeps a
+`catch_unwind` as the last-resort guard against losing a design. Four variants, built from one
+frozen source snapshot, with no other build running:
+
+| variant | solvecraft | solvecraft-cli | 100 holes | 80-cut pattern | 196-copy pattern | cold start |
+|---|---:|---:|---:|---:|---:|---:|
+| thin LTO, 16 units (before) | 58,296,296 | 24,996,288 | 4.471 s | 0.382 s | 6.640 s | 1.33 ms |
+| fat LTO, 1 unit | 43,516,544 | 20,135,168 | 4.211 s | 0.377 s | 6.567 s | 1.20 ms |
+| fat LTO, 1 unit, stripped (landed) | 38,099,720 | 17,721,120 | 4.229 s | 0.373 s | 6.390 s | 1.17 ms |
+| thin LTO, 16 units, stripped | 46,417,304 | 19,969,832 | 4.162 s | 0.356 s | 6.312 s | 1.30 ms |
+
+The binaries shrink by 34.6% and 29.1%, run time is equal or slightly better (seven uncontended
+runs per binary with the order alternated), peak RSS about 2 MiB lower, and a cold release build
+goes from 4m14s to 7m29s. The `ci` and `dev` profiles are untouched, so the quality gates and
+tests are unaffected. `strip` removes symbol names from release backtraces; there is no backtrace
+code in the repository, and profiling a release build needs
+`CARGO_PROFILE_RELEASE_STRIP=none`.
