@@ -419,12 +419,30 @@ pub(crate) fn read_item(cx: &Ctx, id: u64) -> R<BrepOut> {
     if shells.is_empty() {
         return Err(failed.first().cloned().unwrap_or_else(|| "no shells".into()));
     }
-    let solid = match guard("step solid", || mt::Solid::try_new(shells.clone()).map_err(|e| crate::KernelError::Failed(e.to_string()))) {
-        Ok(s) => s,
-        Err(_) => {
-            closed = false;
-            mt::Solid::new_unchecked(shells)
+    // `mt::Solid::try_new` only checks each shell (non-empty, connected, closed, no singular
+    // vertex) and hands the shells back unchanged, so the same checks run here on the borrowed
+    // shells. That keeps the failure path's shells without copying the whole solid first: the
+    // successful path used to clone every face, edge, vertex, curve and surface to keep a copy
+    // that was then dropped.
+    let checked = guard("step solid", || {
+        for sh in &shells {
+            if sh.is_empty() {
+                return Err(crate::KernelError::Failed("empty shell".into()));
+            }
+            if !sh.is_connected() {
+                return Err(crate::KernelError::Failed("shell is not connected".into()));
+            }
+            if sh.shell_condition() != truck_topology::shell::ShellCondition::Closed {
+                return Err(crate::KernelError::Failed("shell is not closed".into()));
+            }
+            if !sh.singular_vertices().is_empty() {
+                return Err(crate::KernelError::Failed("shell is not manifold".into()));
+            }
         }
-    };
-    Ok(BrepOut { solid, failed, closed, file_faces, face_origin })
+        Ok(())
+    });
+    if checked.is_err() {
+        closed = false;
+    }
+    Ok(BrepOut { solid: mt::Solid::new_unchecked(shells), failed, closed, file_faces, face_origin })
 }

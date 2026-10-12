@@ -13,6 +13,7 @@ pub(crate) mod p21;
 mod split;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::sync::Arc;
 
 use mt::EuclideanSpace as _;
 use serde::{Deserialize, Serialize};
@@ -30,6 +31,9 @@ const MAX_BODIES: usize = 10_000;
 /// Most product occurrences and mapped representations visited (a shared sub-assembly used
 /// twice at every level would otherwise grow exponentially).
 const MAX_VISITS: usize = 100_000;
+/// Most representation entries walked while deciding which items are read exactly once. A
+/// larger file keeps every conversion rather than paying for the walk.
+const MAX_CLOSURE_WORK: usize = 1 << 16;
 
 /// A body read from a STEP file.
 #[derive(Clone, Debug)]
@@ -78,6 +82,10 @@ pub struct StepImport {
     /// FILE_NAME originating system.
     pub system: String,
 }
+
+/// One converted representation item: the truck solid, whether its shells are closed, the
+/// faces the file had, and the file face of each kernel face (band faces split into two).
+type SolidEntry = (mt::Solid, bool, usize, Vec<u64>);
 
 /// Reading context: the file and the units of the representation being read.
 pub(crate) struct Ctx<'a> {
@@ -233,8 +241,13 @@ struct Reader<'a> {
     colors: HashMap<u64, [f32; 3]>,
     /// Opacity of styled items with a transparency (1 = opaque).
     opacity: HashMap<u64, f32>,
-    /// Converted items (brep id → solid, or the error).
-    solids: HashMap<u64, std::result::Result<(mt::Solid, bool, usize, Vec<u64>), String>>,
+    /// Converted items (brep id → entry, or the error). Held behind `Arc` so a repeated item
+    /// shares one conversion: a one-use item hands its only reference on without copying the
+    /// solid, a repeated one is copied only where the instance needs geometry of its own.
+    solids: HashMap<u64, std::result::Result<Arc<SolidEntry>, String>>,
+    /// Items the file converts exactly once (see `index`): keeping their solids would hold a
+    /// second copy of the whole import for nothing.
+    once: HashSet<u64>,
     used_items: HashSet<u64>,
     /// Items already instanced for the product being read.
     node_items: HashSet<u64>,
@@ -246,6 +259,29 @@ struct Reader<'a> {
 }
 
 impl<'a> Reader<'a> {
+    /// A reader over a parsed file, with nothing indexed yet.
+    fn new(ex: &'a Exchange) -> Reader<'a> {
+        Reader {
+            ex,
+            units: HashMap::new(),
+            warnings: BTreeMap::new(),
+            reps: HashMap::new(),
+            rep_links: HashMap::new(),
+            pd_reps: HashMap::new(),
+            children: HashMap::new(),
+            placements: HashMap::new(),
+            colors: HashMap::new(),
+            opacity: HashMap::new(),
+            solids: HashMap::new(),
+            once: HashSet::new(),
+            used_items: HashSet::new(),
+            node_items: HashSet::new(),
+            visits: 0,
+            unmeshed_checked: HashSet::new(),
+            bodies: Vec::new(),
+        }
+    }
+
     fn warn(&mut self, msg: impl Into<String>) {
         *self.warnings.entry(msg.into()).or_default() += 1;
     }
@@ -256,11 +292,22 @@ impl<'a> Reader<'a> {
         let mut sdrs: Vec<(u64, u64)> = Vec::new(); // (PDS, rep)
         let mut cdsrs: Vec<(u64, u64)> = Vec::new(); // (relationship, PDS)
         let mut nauos: Vec<(u64, u64, u64)> = Vec::new(); // (id, parent, child)
+        // Item → how many shape representations list it, and the one representation the item
+        // comes from, to tell items the file converts exactly once (see `once`).
+        let mut item_reps: HashMap<u64, usize> = HashMap::new();
+        let mut item_rep: HashMap<u64, u64> = HashMap::new();
+        // True as soon as the file can walk a product definition twice: every occurrence of a
+        // component makes the reader convert the component's items again.
+        let mut repeated = false;
         let mut ids: Vec<&u64> = ex.entities.keys().collect();
         ids.sort();
         for &id in ids {
             let Some(e) = ex.get(id) else { continue };
             if let Some(r) = representation(e) {
+                for item in &r.0 {
+                    *item_reps.entry(*item).or_default() += 1;
+                    item_rep.entry(*item).or_insert(id);
+                }
                 self.reps.insert(id, r);
             }
             let p = e.params();
@@ -277,11 +324,13 @@ impl<'a> Reader<'a> {
                     }
                 }
                 "CONTEXT_DEPENDENT_SHAPE_REPRESENTATION" => {
+                    repeated = true;
                     if let (Some(r), Some(d)) = (rf(0), rf(1)) {
                         cdsrs.push((r, d));
                     }
                 }
                 "NEXT_ASSEMBLY_USAGE_OCCURRENCE" | "ASSEMBLY_COMPONENT_USAGE" | "SPECIFIED_HIGHER_USAGE_OCCURRENCE" => {
+                    repeated = true;
                     if let (Some(a), Some(b)) = (rf(3), rf(4)) {
                         nauos.push((id, a, b));
                     }
@@ -319,6 +368,30 @@ impl<'a> Reader<'a> {
             if parent != child {
                 self.children.entry(parent).or_default().push(id);
             }
+        }
+        // A file without component occurrences walks each product definition once, so a
+        // representation reached from exactly one of them is walked once too. An item that only
+        // such a representation lists is converted exactly once and needs no cache entry;
+        // anything else keeps every conversion, as before.
+        if !repeated {
+            let mut entries: HashMap<u64, usize> = HashMap::new();
+            let mut work = 0usize;
+            for reps in self.pd_reps.values() {
+                for r in self.rep_closure(reps) {
+                    work += 1;
+                    if work > MAX_CLOSURE_WORK {
+                        // Too much to walk cheaply: keep every conversion.
+                        entries.clear();
+                        break;
+                    }
+                    *entries.entry(r).or_default() += 1;
+                }
+            }
+            self.once = item_reps
+                .iter()
+                .filter(|(item, n)| **n == 1 && item_rep.get(item).and_then(|r| entries.get(r)).is_some_and(|c| *c == 1))
+                .map(|(item, _)| *item)
+                .collect();
         }
     }
 
@@ -424,7 +497,7 @@ impl<'a> Reader<'a> {
         seen
     }
 
-    fn item_solid(&mut self, item: u64, u: Units) -> Option<(mt::Solid, bool, usize, Vec<u64>)> {
+    fn item_solid(&mut self, item: u64, u: Units) -> Option<Arc<SolidEntry>> {
         if let Some(r) = self.solids.get(&item) {
             return r.as_ref().ok().cloned();
         }
@@ -447,8 +520,11 @@ impl<'a> Reader<'a> {
                 Err(msg)
             }
         };
-        self.solids.insert(item, r.clone());
-        r.ok()
+        let entry = r.map(Arc::new);
+        if !self.once.contains(&item) {
+            self.solids.insert(item, entry.clone());
+        }
+        entry.ok()
     }
 
     fn label(&self, item: u64) -> String {
@@ -481,7 +557,13 @@ impl<'a> Reader<'a> {
                         self.warn(format!("more than {MAX_BODIES} bodies: the rest are left out"));
                         return;
                     }
-                    let Some((solid, closed, file_faces, face_origin)) = self.item_solid(item, u) else { continue };
+                    let Some(entry) = self.item_solid(item, u) else { continue };
+                    // A one-use item is the only reference to its entry, so the solid moves out;
+                    // an item whose conversion is cached for a later instance needs its own copy.
+                    let (solid, closed, file_faces, face_origin) = match Arc::try_unwrap(entry) {
+                        Ok(entry) => entry,
+                        Err(shared) => (*shared).clone(),
+                    };
                     let identity = *m == mt::Matrix4::from_scale(1.0);
                     let placed = if identity {
                         Ok(solid)
@@ -495,6 +577,9 @@ impl<'a> Reader<'a> {
                             let own = e.params().first().and_then(Param::as_str).unwrap_or("").trim().to_string();
                             let name = if own.is_empty() { product.to_string() } else { own };
                             // Faces the mesher gives up on (or that the budget cut short) are reported.
+                            // Kept as `unmeshed_faces` rather than `Body::new`'s cached count: for a
+                            // solid whose span is over 100 mm the two use different tolerances and
+                            // would report different numbers. See import-report.md (finding 3).
                             if self.unmeshed_checked.insert(item) {
                                 let n = body.unmeshed_faces();
                                 if n > 0 {
@@ -827,24 +912,7 @@ pub fn step_import_shared(text: &str) -> Result<std::sync::Arc<StepImport>> {
 /// Read a STEP file: its solids (as bodies, placed by the assembly structure) and the tree.
 pub fn step_import(text: &str) -> Result<StepImport> {
     let ex = p21::parse(text).map_err(KernelError::Invalid)?;
-    let mut rd = Reader {
-        ex: &ex,
-        units: HashMap::new(),
-        warnings: BTreeMap::new(),
-        reps: HashMap::new(),
-        rep_links: HashMap::new(),
-        pd_reps: HashMap::new(),
-        children: HashMap::new(),
-        placements: HashMap::new(),
-        colors: HashMap::new(),
-        opacity: HashMap::new(),
-        solids: HashMap::new(),
-        used_items: HashSet::new(),
-        node_items: HashSet::new(),
-        visits: 0,
-        unmeshed_checked: HashSet::new(),
-        bodies: Vec::new(),
-    };
+    let mut rd = Reader::new(&ex);
     rd.index();
     // Roots: product definitions that are nobody's component.
     let child_pds: HashSet<u64> =
