@@ -3317,7 +3317,6 @@ dependencies = [
 name = "solvecraft-doc"
 version = "0.3.2"
 dependencies = [
- "log",
  "serde",
  "serde_json",
  "sha2",
@@ -3332,7 +3331,6 @@ dependencies = [
 name = "solvecraft-engine"
 version = "0.3.2"
 dependencies = [
- "log",
  "serde",
  "serde_json",
  "solvecraft-doc",
