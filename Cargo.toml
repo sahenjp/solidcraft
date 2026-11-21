@@ -39,7 +39,7 @@ truck-stepio = { version = "0.3", default-features = false }
 truck-topology = "0.6"
 
 # packages (3MF)
-zip = { version = "3", default-features = false, features = ["deflate"] }
+zip = { version = "9", default-features = false, features = ["deflate"] }
 quick-xml = "0.38"
 
 # fonts (sketch text outlines; MIT OR Apache-2.0, pure Rust)
